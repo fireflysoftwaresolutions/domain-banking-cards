@@ -26,18 +26,18 @@ import java.util.UUID;
 /**
  * Reads card issuance defaults from core-common-config-mgmt.
  */
-public final class ConfigurationCardJourneyParameterAdapter implements CardJourneyParameterPort {
+public final class ConfigurationCardJourneyParameterAdapterImpl implements CardJourneyParameterPort {
 
     private final EnvironmentConfigurationsApi environments;
 
-    public ConfigurationCardJourneyParameterAdapter(EnvironmentConfigurationsApi environments) {
+    public ConfigurationCardJourneyParameterAdapterImpl(EnvironmentConfigurationsApi environments) {
         this.environments = environments;
     }
 
     @Override
     public Mono<CardIssuanceDefaults> issuanceDefaults() {
-        return read(SandboxCardJourneyParameterAdapter.DEFAULT_CURRENCY_KEY)
-                .zipWith(read(SandboxCardJourneyParameterAdapter.TENURE_YEARS_KEY))
+        return read(SandboxCardJourneyParameterAdapterImpl.DEFAULT_CURRENCY_KEY)
+                .zipWith(read(SandboxCardJourneyParameterAdapterImpl.TENURE_YEARS_KEY))
                 .map(pair -> new CardIssuanceDefaults(pair.getT1(), Integer.parseInt(pair.getT2())));
     }
 

@@ -33,7 +33,7 @@ public class CardJourneyParameterConfiguration {
             havingValue = "sandbox",
             matchIfMissing = true)
     public CardJourneyParameterPort sandboxCardJourneyParameterPort() {
-        return new SandboxCardJourneyParameterAdapter();
+        return new SandboxCardJourneyParameterAdapterImpl();
     }
 
     @Bean
@@ -46,6 +46,6 @@ public class CardJourneyParameterConfiguration {
         ApiClient client = new ApiClient();
         String trimmed = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         client.setBasePath(trimmed);
-        return new ConfigurationCardJourneyParameterAdapter(new EnvironmentConfigurationsApi(client));
+        return new ConfigurationCardJourneyParameterAdapterImpl(new EnvironmentConfigurationsApi(client));
     }
 }

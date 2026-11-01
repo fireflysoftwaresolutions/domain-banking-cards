@@ -23,7 +23,7 @@ import reactor.core.publisher.Mono;
  * {@code journey.cards.default-currency} and {@code journey.cards.tenure-years}.
  * This adapter does not call the configuration service.
  */
-public final class SandboxCardJourneyParameterAdapter implements CardJourneyParameterPort {
+public final class SandboxCardJourneyParameterAdapterImpl implements CardJourneyParameterPort {
 
     public static final String DEFAULT_CURRENCY_KEY = "journey.cards.default-currency";
     public static final String TENURE_YEARS_KEY = "journey.cards.tenure-years";

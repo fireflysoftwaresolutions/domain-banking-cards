@@ -20,7 +20,7 @@ package io.fireflysoftware.domain.banking.cards.core.card.handlers;
 import io.fireflysoftware.core.banking.cards.sdk.api.CardsApi;
 import io.fireflysoftware.core.banking.cards.sdk.model.CardDTO;
 import io.fireflysoftware.domain.banking.cards.core.card.commands.IssueCardCommand;
-import io.fireflysoftware.domain.banking.cards.core.card.parameters.SandboxCardJourneyParameterAdapter;
+import io.fireflysoftware.domain.banking.cards.core.card.parameters.SandboxCardJourneyParameterAdapterImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,7 +54,7 @@ class IssueCardHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new IssueCardHandler(cardsApi, new SandboxCardJourneyParameterAdapter());
+        handler = new IssueCardHandler(cardsApi, new SandboxCardJourneyParameterAdapterImpl());
     }
 
     @Test
@@ -150,7 +150,7 @@ class IssueCardHandlerTest {
     @DisplayName("Constructor should set CardsApi dependency")
     void testConstructor_ShouldSetCardsApi() {
         // When
-        IssueCardHandler newHandler = new IssueCardHandler(cardsApi, new SandboxCardJourneyParameterAdapter());
+        IssueCardHandler newHandler = new IssueCardHandler(cardsApi, new SandboxCardJourneyParameterAdapterImpl());
 
         // Then
         assertNotNull(newHandler);
