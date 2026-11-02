@@ -18,6 +18,11 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Web module for OpenAPI spec -->
         <dependency>
             <groupId>io.fireflysoftware</groupId>
@@ -105,6 +110,9 @@
                             <apiPackage>io.fireflysoftware.domain.banking.cards.sdk.api</apiPackage>
                             <modelPackage>io.fireflysoftware.domain.banking.cards.sdk.model</modelPackage>
                             <invokerPackage>io.fireflysoftware.domain.banking.cards.sdk.invoker</invokerPackage>
+                            <schemaMappings>
+                                <schemaMapping>FireflyInstant=java.time.Instant</schemaMapping>
+                            </schemaMappings>
                             <configOptions>
                                 <java20>true</java20>
                                 <useTags>true</useTags>

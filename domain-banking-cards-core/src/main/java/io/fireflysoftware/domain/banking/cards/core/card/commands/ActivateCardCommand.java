@@ -21,6 +21,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationResponse;
 import org.fireflyframework.cqrs.command.Command;
 
 import java.util.UUID;
@@ -29,7 +32,10 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ActivateCardCommand implements Command<Void> {
+public class ActivateCardCommand implements Command<CardActivationResponse> {
     private UUID cardId;
+    private UUID actionId;
+    @ToString.Exclude
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String activationCode;
 }

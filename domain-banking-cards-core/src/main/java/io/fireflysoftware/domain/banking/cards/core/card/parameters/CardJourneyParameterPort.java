@@ -20,8 +20,8 @@ import reactor.core.publisher.Mono;
 
 /**
  * Card issuance defaults read from configuration.
- * The default adapter is {@link SandboxCardJourneyParameterAdapter}.
- * An installer replaces it with {@link ConfigurationCardJourneyParameterAdapter}
+ * The default adapter is {@link SandboxCardJourneyParameterAdapterImpl}.
+ * An installer replaces it with {@link ConfigurationCardJourneyParameterAdapterImpl}
  * by setting {@code firefly.cards.parameters.adapter=configuration}.
  */
 public interface CardJourneyParameterPort {

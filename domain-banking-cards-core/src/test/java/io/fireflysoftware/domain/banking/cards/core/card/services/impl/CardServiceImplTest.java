@@ -32,6 +32,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
+import org.fireflyframework.cqrs.command.CommandBus;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationResponse;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
@@ -52,56 +54,40 @@ class CardServiceImplTest {
     @Mock
     private SagaResult sagaResult;
 
+    @Mock
+    private CommandBus commands;
+
     private CardServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CardServiceImpl(sagaEngine);
+        service = new CardServiceImpl(sagaEngine, commands);
     }
 
     @Test
-    @DisplayName("Should issue card successfully")
-    void testIssueCard_ShouldExecuteSaga() {
-        // Given
-        IssueCardCommand command = IssueCardCommand.builder()
-                .customerId(UUID.randomUUID())
-                .accountId(UUID.randomUUID())
-                .cardProgramId(UUID.randomUUID())
-                .build();
-        when(sagaEngine.execute(eq("IssueCardSaga"), any(StepInputs.class)))
-                .thenReturn(Mono.just(sagaResult));
-
-        // When
-        Mono<SagaResult> result = service.issueCard(command);
-
-        // Then
-        StepVerifier.create(result)
-                .expectNext(sagaResult)
-                .verifyComplete();
-
-        verify(sagaEngine).execute(eq("IssueCardSaga"), any(StepInputs.class));
+    void unconfiguredIssuanceDoesNotStartFabricatedSaga() {
+        var command = IssueCardCommand.builder().customerId(UUID.randomUUID())
+                .accountId(UUID.randomUUID()).cardProgramId(UUID.randomUUID()).build();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            StepVerifier.create(service.issueCard(command)).expectErrorMatches(error ->
+                    error instanceof org.springframework.web.server.ResponseStatusException failure
+                    && failure.getStatusCode().value() == 503).verify();
+        }
+        verifyNoInteractions(sagaEngine, commands);
     }
 
     @Test
-    @DisplayName("Should activate card successfully")
-    void testActivateCard_ShouldExecuteSaga() {
-        // Given
+    @DisplayName("Activation preserves the actual owner receipt without a synthetic saga result")
+    void testActivateCard_ShouldReturnOwnerReceipt() {
         ActivateCardCommand command = ActivateCardCommand.builder()
-                .cardId(UUID.randomUUID())
-                .activationCode("123456")
-                .build();
-        when(sagaEngine.execute(eq("ActivateCardSaga"), any(StepInputs.class)))
-                .thenReturn(Mono.just(sagaResult));
-
-        // When
-        Mono<SagaResult> result = service.activateCard(command);
-
-        // Then
-        StepVerifier.create(result)
-                .expectNext(sagaResult)
-                .verifyComplete();
-
-        verify(sagaEngine).execute(eq("ActivateCardSaga"), any(StepInputs.class));
+                .cardId(UUID.randomUUID()).actionId(UUID.randomUUID())
+                .activationCode("syntheticIssuedPossessionProofForTransportOnly0123456789").build();
+        var receipt = new CardActivationResponse(command.getActionId(), command.getCardId(),
+                CardActivationResponse.State.UNCERTAIN, null);
+        when(commands.<CardActivationResponse>send(command)).thenReturn(Mono.just(receipt));
+        StepVerifier.create(service.activateCard(command)).expectNext(receipt).verifyComplete();
+        verify(commands).send(command);
+        verifyNoInteractions(sagaEngine);
     }
 
     @Test
@@ -290,50 +276,27 @@ class CardServiceImplTest {
     }
 
     @Test
-    @DisplayName("Should handle saga execution errors")
-    void testIssueCard_ShouldHandleErrors() {
-        // Given
-        IssueCardCommand command = IssueCardCommand.builder()
-                .customerId(UUID.randomUUID())
-                .accountId(UUID.randomUUID())
-                .cardProgramId(UUID.randomUUID())
-                .build();
-        RuntimeException error = new RuntimeException("Saga execution failed");
-        when(sagaEngine.execute(eq("IssueCardSaga"), any(StepInputs.class)))
-                .thenReturn(Mono.error(error));
-
-        // When
-        Mono<SagaResult> result = service.issueCard(command);
-
-        // Then
-        StepVerifier.create(result)
-                .expectError(RuntimeException.class)
-                .verify();
-
-        verify(sagaEngine).execute(eq("IssueCardSaga"), any(StepInputs.class));
+    void unconfiguredIssuanceRemainsUnavailableAcrossSubscriptions() {
+        var command = IssueCardCommand.builder().customerId(UUID.randomUUID())
+                .accountId(UUID.randomUUID()).cardProgramId(UUID.randomUUID()).build();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            StepVerifier.create(service.issueCard(command)).expectErrorMatches(error ->
+                    error instanceof org.springframework.web.server.ResponseStatusException failure
+                    && failure.getStatusCode().value() == 503).verify();
+        }
+        verifyNoInteractions(sagaEngine, commands);
     }
 
     @Test
-    @DisplayName("Constructor should set saga engine dependency")
-    void testConstructor_ShouldSetSagaEngine() {
-        // When
-        CardServiceImpl newService = new CardServiceImpl(sagaEngine);
-
-        // Then
-        assertNotNull(newService);
-        // Verify it works by calling a method
-        IssueCardCommand command = IssueCardCommand.builder()
-                .customerId(UUID.randomUUID())
-                .accountId(UUID.randomUUID())
-                .cardProgramId(UUID.randomUUID())
-                .build();
-        when(sagaEngine.execute(eq("IssueCardSaga"), any(StepInputs.class)))
-                .thenReturn(Mono.just(sagaResult));
-
-        Mono<SagaResult> result = newService.issueCard(command);
-
-        StepVerifier.create(result)
-                .expectNext(sagaResult)
-                .verifyComplete();
+    void constructorDoesNotAuthorizeOrStartIssuance() {
+        var command = IssueCardCommand.builder().customerId(UUID.randomUUID())
+                .accountId(UUID.randomUUID()).cardProgramId(UUID.randomUUID()).build();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            StepVerifier.create(service.issueCard(command)).expectErrorMatches(error ->
+                    error instanceof org.springframework.web.server.ResponseStatusException failure
+                    && failure.getStatusCode().value() == 503).verify();
+        }
+        verifyNoInteractions(sagaEngine, commands);
     }
+
 }

@@ -24,12 +24,13 @@ import io.fireflysoftware.domain.banking.cards.core.security.commands.UpdateSecu
 import io.fireflysoftware.domain.banking.cards.core.virtual.commands.IssueVirtualCardCommand;
 import org.fireflyframework.orchestration.saga.engine.SagaResult;
 import reactor.core.publisher.Mono;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationResponse;
 
 public interface CardService {
 
     Mono<SagaResult> issueCard(IssueCardCommand command);
 
-    Mono<SagaResult> activateCard(ActivateCardCommand command);
+    Mono<CardActivationResponse> activateCard(ActivateCardCommand command);
 
     Mono<SagaResult> blockCard(BlockCardCommand command);
 
