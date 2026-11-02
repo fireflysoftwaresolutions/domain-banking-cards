@@ -49,13 +49,16 @@ class CardsControllerTest {
     private CardService cardService;
 
     @Mock
+    private io.fireflysoftware.domain.banking.cards.core.card.activation.CardActivationRecoveryService recovery;
+
+    @Mock
     private SagaResult sagaResult;
 
     private CardsController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new CardsController(cardService);
+        controller = new CardsController(cardService, recovery);
     }
 
     @Test
@@ -249,7 +252,7 @@ class CardsControllerTest {
     @DisplayName("Constructor should set service dependency")
     void testConstructor_ShouldSetService() {
         // When
-        CardsController newController = new CardsController(cardService);
+        CardsController newController = new CardsController(cardService, recovery);
 
         // Then
         assertNotNull(newController);
@@ -265,5 +268,17 @@ class CardsControllerTest {
         StepVerifier.create(result)
                 .assertNext(response -> assertEquals(204, response.getStatusCode().value()))
                 .verifyComplete();
+    }
+    @Test void originalReceiptRecoveryIsUncachedAndPreservesUncertainState() {
+        UUID card=UUID.randomUUID(),action=UUID.randomUUID();
+        var receipt=new CardActivationResponse(action,card,CardActivationResponse.State.UNCERTAIN,null);
+        when(recovery.recover(card,action)).thenReturn(Mono.just(receipt));
+        var request=org.springframework.mock.http.server.reactive.MockServerHttpRequest.get("/api/v1/cards/"+card+"/activation/"+action).header("Authorization","Bearer synthetic.original.token").build();
+        StepVerifier.create(controller.recoverCardActivation(card,action,request)).assertNext(response->{assertEquals(200,response.getStatusCode().value());assertEquals("no-store",response.getHeaders().getCacheControl());assertEquals(receipt,response.getBody());}).verifyComplete();
+        verify(recovery).recover(card,action);verifyNoInteractions(cardService);
+    }
+    @Test void receiptRecoveryWithoutBearerCannotInvokeTheReadService() {
+        var request=org.springframework.mock.http.server.reactive.MockServerHttpRequest.get("/").build();
+        StepVerifier.create(controller.recoverCardActivation(UUID.randomUUID(),UUID.randomUUID(),request)).expectErrorMatches(error->error instanceof org.springframework.web.server.ResponseStatusException status&&status.getStatusCode().value()==401).verify();verifyNoInteractions(recovery,cardService);
     }
 }

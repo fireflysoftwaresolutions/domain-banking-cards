@@ -53,6 +53,7 @@ public class CardsController {
     private static final String STATUS_FAILED = "FAILED";
 
     private final CardService cardService;
+    private final io.fireflysoftware.domain.banking.cards.core.card.activation.CardActivationRecoveryService activationRecovery;
 
     @PostMapping
     @Operation(summary = "Issue a new card", description = "Issues a new debit or credit card for a customer")
@@ -100,6 +101,27 @@ public class CardsController {
                     case REJECTED -> 422;
                     case RECONCILIATION_REQUIRED -> 409;
                 }).body(receipt)).contextWrite(context -> context.put(CardActivationCallerToken.class, caller));
+    }
+
+    @GetMapping(value = "/{cardId}/activation/{actionId}", produces = "application/json")
+    @Operation(summary = "Read the original card activation receipt", description = "Requires current ownership. This read creates no action, sends no proof or issuer command, and leaves uncertain receipts uncertain.")
+    @SecurityRequirement(name = "cardBearer")
+    @DisableIdempotency
+    public Mono<ResponseEntity<CardActivationResponse>> recoverCardActivation(
+            @PathVariable UUID cardId, @PathVariable UUID actionId, ServerHttpRequest transport) {
+        var authorization = transport.getHeaders().get(org.springframework.http.HttpHeaders.AUTHORIZATION);
+        if (authorization == null || authorization.size() != 1 || !authorization.getFirst().startsWith("Bearer ")) {
+            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Original card activation bearer required"));
+        }
+        final CardActivationCallerToken caller;
+        try {
+            caller = new CardActivationCallerToken(authorization.getFirst().substring(7));
+        } catch (IllegalArgumentException invalid) {
+            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Original card activation bearer required"));
+        }
+        return activationRecovery.recover(cardId, actionId)
+                .map(receipt -> ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(receipt))
+                .contextWrite(context -> context.put(CardActivationCallerToken.class, caller));
     }
 
     @PostMapping("/{cardId}/block")
