@@ -17,6 +17,9 @@
 
 package io.fireflysoftware.domain.banking.cards.web.controllers;
 
+import io.fireflysoftware.domain.banking.cards.core.card.activation.CardActivationCallerToken;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.web.server.ResponseStatusException;
 import io.fireflysoftware.domain.banking.cards.core.card.commands.*;
 import io.fireflysoftware.domain.banking.cards.core.card.services.CardService;
 import io.fireflysoftware.domain.banking.cards.interfaces.dtos.IssueCardResponse;
@@ -24,6 +27,10 @@ import io.fireflysoftware.domain.banking.cards.interfaces.dtos.ReplaceCardRespon
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationRequest;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationResponse;
+import org.fireflyframework.web.idempotency.annotation.DisableIdempotency;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
 import org.fireflyframework.orchestration.saga.engine.SagaResult;
 import org.springframework.http.HttpStatus;
@@ -33,10 +40,13 @@ import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
+@org.springframework.context.annotation.Import(io.fireflysoftware.domain.banking.cards.web.openapi.CardActivationOpenApiConfiguration.class)
 @RestController
 @RequestMapping("/api/v1/cards")
 @RequiredArgsConstructor
 @Tag(name = "Cards", description = "Card lifecycle management - issue, activate, block, replace, and cancel cards")
+@io.swagger.v3.oas.annotations.security.SecurityScheme(name = "cardBearer",
+        type = io.swagger.v3.oas.annotations.enums.SecuritySchemeType.HTTP, scheme = "bearer", bearerFormat = "JWT")
 public class CardsController {
 
     private static final String STATUS_COMPLETED = "COMPLETED";
@@ -60,17 +70,36 @@ public class CardsController {
                 });
     }
 
-    @PostMapping("/{cardId}/activate")
-    @Operation(summary = "Activate a card", description = "Activates a card using the activation code")
-    public Mono<ResponseEntity<Void>> activateCard(
+    @PostMapping(value = "/{cardId}/activate", consumes = "application/json", produces = "application/json")
+    @Operation(summary = "Request card activation", description = "Submits issued possession proof to the card owner; pending and uncertain receipts do not confirm activation")
+    @SecurityRequirement(name = "cardBearer")
+    @DisableIdempotency
+    public Mono<ResponseEntity<CardActivationResponse>> activateCard(
             @PathVariable UUID cardId,
-            @RequestParam String activationCode) {
+            @RequestHeader("X-Idempotency-Key") UUID actionId,
+            @Valid @RequestBody CardActivationRequest request, ServerHttpRequest transport) {
+        var authorization = transport.getHeaders().get(org.springframework.http.HttpHeaders.AUTHORIZATION);
+        if (authorization == null || authorization.size() != 1 || !authorization.getFirst().startsWith("Bearer ")) {
+            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Original card activation bearer required"));
+        }
+        final CardActivationCallerToken caller;
+        try {
+            caller = new CardActivationCallerToken(authorization.getFirst().substring(7));
+        } catch (IllegalArgumentException invalid) {
+            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Original card activation bearer required"));
+        }
         ActivateCardCommand command = ActivateCardCommand.builder()
                 .cardId(cardId)
-                .activationCode(activationCode)
+                .actionId(actionId)
+                .activationCode(request.activationProof())
                 .build();
         return cardService.activateCard(command)
-                .map(CardsController::toVoidResponse);
+                .map(receipt -> ResponseEntity.status(switch (receipt.state()) {
+                    case CONFIRMED -> 200;
+                    case RESERVED, UNCERTAIN -> 202;
+                    case REJECTED -> 422;
+                    case RECONCILIATION_REQUIRED -> 409;
+                }).body(receipt)).contextWrite(context -> context.put(CardActivationCallerToken.class, caller));
     }
 
     @PostMapping("/{cardId}/block")

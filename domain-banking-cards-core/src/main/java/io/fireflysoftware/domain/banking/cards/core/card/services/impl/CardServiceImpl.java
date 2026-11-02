@@ -28,6 +28,8 @@ import org.fireflyframework.orchestration.saga.engine.SagaResult;
 import org.fireflyframework.orchestration.saga.engine.StepInputs;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import org.fireflyframework.cqrs.command.CommandBus;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationResponse;
 
 import static io.fireflysoftware.domain.banking.cards.core.card.utils.IssueCardConstants.*;
 
@@ -36,30 +38,23 @@ public class CardServiceImpl implements CardService {
 
     private final SagaEngine engine;
 
-    public CardServiceImpl(SagaEngine engine) {
+    private final CommandBus commands;
+
+    public CardServiceImpl(SagaEngine engine, CommandBus commands) {
         this.engine = engine;
+        this.commands = commands;
     }
 
     @Override
     public Mono<SagaResult> issueCard(IssueCardCommand command) {
-        StepInputs inputs = StepInputs.builder()
-                .forStepId(STEP_VALIDATE_CUSTOMER, command)
-                .forStepId(STEP_CREATE_CARD, command)
-                .forStepId(STEP_SETUP_LIMITS, command)
-                .forStepId(STEP_SETUP_SECURITY, command)
-                .forStepId(STEP_ORDER_PHYSICAL, command)
-                .build();
-        return engine.execute(SAGA_ISSUE_CARD_NAME, inputs);
+        return Mono.error(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                "Core card issuance initiation is not configured"));
     }
 
     @Override
-    public Mono<SagaResult> activateCard(ActivateCardCommand command) {
-        StepInputs inputs = StepInputs.builder()
-                .forStepId("validateActivationCode", command)
-                .forStepId("activateCard", command)
-                .forStepId("sendWelcomeNotification", command)
-                .build();
-        return engine.execute("ActivateCardSaga", inputs);
+    public Mono<CardActivationResponse> activateCard(ActivateCardCommand command) {
+        return commands.send(command);
     }
 
     @Override

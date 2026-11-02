@@ -30,6 +30,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 import reactor.core.publisher.Mono;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationRequest;
+import io.fireflysoftware.domain.banking.cards.interfaces.dtos.CardActivationResponse;
 import reactor.test.StepVerifier;
 
 import java.util.Optional;
@@ -117,24 +119,31 @@ class CardsControllerTest {
     }
 
     @Test
-    @DisplayName("Should activate card successfully")
-    void testActivateCard_ShouldReturnNoContentResponse() {
-        // Given
+    @DisplayName("Activation returns each actual owner state without treating pending as success")
+    void testActivateCard_ShouldReturnExactOwnerStatus() {
         UUID cardId = UUID.randomUUID();
-        String activationCode = "123456";
-        when(sagaResult.isSuccess()).thenReturn(true);
-        when(cardService.activateCard(any(ActivateCardCommand.class)))
-                .thenReturn(Mono.just(sagaResult));
-
-        // When
-        Mono<ResponseEntity<Void>> result = controller.activateCard(cardId, activationCode);
-
-        // Then
-        StepVerifier.create(result)
-                .assertNext(response -> assertEquals(204, response.getStatusCode().value()))
-                .verifyComplete();
-
-        verify(cardService).activateCard(any(ActivateCardCommand.class));
+        UUID actionId = UUID.randomUUID();
+        String proof = "syntheticIssuedPossessionProofForTransportOnly0123456789";
+        for (var state : CardActivationResponse.State.values()) {
+            var receipt = new CardActivationResponse(actionId, cardId, state, null);
+            when(cardService.activateCard(any(ActivateCardCommand.class))).thenReturn(Mono.just(receipt));
+            int expected = switch (state) {
+                case CONFIRMED -> 200;
+                case RESERVED, UNCERTAIN -> 202;
+                case REJECTED -> 422;
+                case RECONCILIATION_REQUIRED -> 409;
+            };
+            StepVerifier.create(controller.activateCard(cardId, actionId, new CardActivationRequest(proof),
+                    org.springframework.mock.http.server.reactive.MockServerHttpRequest.post("/api/v1/cards/" + cardId + "/activate")
+                            .header("Authorization", "Bearer synthetic.original.token").build()))
+                    .assertNext(response -> {
+                        assertEquals(expected, response.getStatusCode().value());
+                        assertEquals(receipt, response.getBody());
+                    }).verifyComplete();
+        }
+        verify(cardService, times(5)).activateCard(argThat(command ->
+                cardId.equals(command.getCardId()) && actionId.equals(command.getActionId())
+                        && proof.equals(command.getActivationCode())));
     }
 
     @Test

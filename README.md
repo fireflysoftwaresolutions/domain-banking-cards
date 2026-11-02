@@ -62,7 +62,7 @@ sdk (generated from openapi.yml)
 
 | Subdomain | Description |
 |-----------|-------------|
-| `card` | Card issuance, activation, blocking, replacement, cancellation via sagas |
+| `card` | Card lifecycle orchestration; activation delegates to the Core SDK and issuance is unavailable pending the owner integration |
 | `virtual` | Virtual card creation and management via `IssueVirtualCardSaga` |
 | `limits` | Card spending limits (daily, monthly, per-transaction) |
 | `security` | Security settings (PIN, CVV, contactless, online) |
@@ -252,3 +252,15 @@ All endpoints return reactive `Mono<ResponseEntity>` or `Flux<ResponseEntity>` r
 | `default` | INFO | Enabled | Standard development |
 | `dev` | DEBUG | Enabled | Verbose debugging |
 | `prod` | WARN | Disabled | Production |
+
+## Caller-owned activation and native authority
+
+`POST /api/v1/cards/{cardId}/activate` requires the caller's stable UUID `X-Idempotency-Key` and the actual issued `activationProof`. Domain delegates through the complete generated Core SDK. It preserves the action, owner state and historical activation timestamp; it does not derive a proof from the card ID or manufacture an activation receipt.
+
+Enable `firefly.cards.activation.delegation.enabled` only with `firefly.security.resource-server.strict-policy=true`. Configure the native receiver's issuer, JWKS, audience and tenant projection, and the delegation settings' exact incoming client, target audience, delegating client, registration, tenant and canonical actor/party claim mappings. The OAuth client registration must use token exchange with the same issuer and a deployment-provided client secret. The factory checks current native identity and scoped policy before and after exchange, verifies the exchanged token and rechecks authority before the SDK call. Never persist bearer tokens or replace the original action after an uncertain result.
+
+A deployment can provide a `PolicyDecisionPort`, or explicitly configure the published OPA adapter through `firefly.cards.authorization.opa.enabled`, `endpoint`, `decision-path` and `evaluation-path`. HTTPS origins and exact document paths are required. Loopback HTTP requires explicit qualification opt-in. Missing or unavailable policy fails closed; the adapter has a two-second deadline and bounded response buffering. Core additionally requires engine-provided policy provenance for its current ownership evaluation.
+
+Timeouts and transport I/O errors return HTTP 503 with an unknown outcome. Owner 5xx responses remain unknown; explicit business refusals remain distinct. No error creates a receipt, repeats the POST or chooses a new action. Read-only original-action recovery is currently available at Core; its Domain and Experience adoption remains open.
+
+Issuance remains unavailable until the Core managed enrollment/provider transition actually issues and persists an instrument and its proof. The removed successful issuance/activation simulations are not replacements for that integration. The default external issuer adapter executes nothing. Controlled native transport qualification does not establish a live issuer or a completed issuance/activation journey.
